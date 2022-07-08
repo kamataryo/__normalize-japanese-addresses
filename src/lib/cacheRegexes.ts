@@ -189,11 +189,7 @@ export const getTownRegexPatterns = async (pref: string, city: string) => {
         ),
     )
 
-    if (city.match(/^京都市/)) {
-      return [town, `.*${pattern}`]
-    } else {
-      return [town, `^${pattern}`]
-    }
+    return [town, pattern]
   }) as [SingleTown, string][]
 
   cachedTownRegexes.set(`${pref}-${city}`, patterns)

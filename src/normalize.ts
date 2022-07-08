@@ -100,15 +100,23 @@ const normalizeTownName = async (addr: string, pref: string, city: string) => {
   addr = addr.trim().replace(/^大字/, '')
   const townPatterns = await getTownRegexPatterns(pref, city)
 
-  for (let i = 0; i < townPatterns.length; i++) {
-    const [_town, pattern] = townPatterns[i]
-    const match = addr.match(pattern)
-    if (match) {
-      return {
-        town: _town.originalTown || _town.town,
-        addr: addr.substr(match[0].length),
-        lat: _town.lat,
-        lng: _town.lng,
+  const regexPrefixes = ['^']
+  if (city.match(/^京都市/)) {
+    // 京都は通り名削除のために後方一致を使う
+    regexPrefixes.push('.*')
+  }
+
+  for (const regexPrefix of regexPrefixes) {
+    for (const [town, pattern] of townPatterns) {
+      const regex = new RegExp(`${regexPrefix}${pattern}`)
+      const match = addr.match(regex)
+      if (match) {
+        return {
+          town: town.originalTown || town.town,
+          addr: addr.substr(match[0].length),
+          lat: town.lat,
+          lng: town.lng,
+        }
       }
     }
   }

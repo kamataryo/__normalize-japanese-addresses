@@ -29,6 +29,13 @@ interface SingleResidential {
 }
 type ResidentialList = SingleResidential[]
 
+interface SingleChiban {
+  banchi: string
+  lat?: string
+  lng?: string
+}
+type ChibanList = SingleChiban[]
+
 const cachedTownRegexes = new LRU<string, [SingleTown, string][]>({
   max: currentConfig.townCacheSize,
   maxAge: 60 * 60 * 24 * 7 * 1000, // 7日間
@@ -40,6 +47,7 @@ let cachedPrefectures: PrefectureList | undefined = undefined
 const cachedTowns: { [key: string]: TownList } = {}
 const cachedGaikuListItem: { [key: string]: GaikuListItem[] } = {}
 const cachedResidentials: { [key: string]: ResidentialList } = {}
+const cachedChibans: { [key: string]: ChibanList } = {}
 let cachedSameNamedPrefectureCityRegexPatterns:
   | [string, string][]
   | undefined = undefined
@@ -164,6 +172,35 @@ export const getResidentials = async (
       `${res1.gaiku}-${res1.jyukyo}`.length,
   )
   return (cachedResidentials[cacheKey] = residentials)
+}
+
+export const getChibans = async (pref: string, city: string, town: string) => {
+  const cacheKey = `${pref}-${city}-${town}`
+  const cache = cachedChibans[cacheKey]
+  if (typeof cache !== 'undefined') {
+    return cache
+  }
+
+  const chibansResp = await __internals.fetch(
+    [
+      '',
+      encodeURI(pref),
+      encodeURI(city),
+      encodeURI(town),
+      encodeURI('地番.json'),
+    ].join('/'),
+  )
+  let chibans: ChibanList
+  try {
+    chibans = (await chibansResp.json()) as ChibanList
+  } catch {
+    chibans = []
+  }
+
+  chibans.sort(
+    (res1, res2) => `${res2.banchi}`.length - `${res1.banchi}`.length,
+  )
+  return (cachedChibans[cacheKey] = chibans)
 }
 
 // 十六町 のように漢数字と町が連結しているか

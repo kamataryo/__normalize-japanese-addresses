@@ -10,6 +10,7 @@ import {
   getTownRegexPatterns,
   getSameNamedPrefectureCityRegexPatterns,
   getResidentials,
+  getChibans,
   getGaikuList,
 } from './lib/cacheRegexes'
 import unfetch from 'isomorphic-unfetch'
@@ -42,6 +43,8 @@ export interface NormalizeResult {
   gaiku?: string
   /** 住居表示住所における住居番号 */
   jyukyo?: string
+  /** 地番住所における番地 */
+  banchi?: string
   /** 正規化後の住所文字列 */
   addr: string
   /** 緯度。データが存在しない場合は null */
@@ -55,7 +58,7 @@ export interface NormalizeResult {
    * - 2 - 市区町村まで判別できた。
    * - 3 - 町丁目まで判別できた。
    * - 7 - 住居表示住所の街区までの判別ができた。
-   * - 8 - 住居表示住所の街区符号・住居番号までの判別ができた。
+   * - 8 - 住居表示情報がある区域では、住居表示住所の街区符号・住居番号までの判別ができた。住居表示住所情報がなあい場合は、地番住所の番地まで判別できた。
    */
   level: number
 }
@@ -144,37 +147,53 @@ const normalizeResidentialPart = async (
   city: string,
   town: string,
 ) => {
-  const [gaikuListItem, residentials] = await Promise.all([
+  const [gaikuListItem, residentials, chibans] = await Promise.all([
     getGaikuList(pref, city, town),
     getResidentials(pref, city, town),
+    getChibans(pref, city, town),
   ])
 
-  // 住居表示未整備
-  if (gaikuListItem.length === 0) {
+  // 住居表示未整備かつ、地番情報もない
+  if (gaikuListItem.length === 0 && chibans.length === 0) {
     return null
   }
 
-  const match = addr.match(/^([1-9][0-9]*)-([1-9][0-9]*)/)
+  const match = addr.match(/^([1-9][0-9]*)(?:-([1-9][0-9]*))?/)
   if (match) {
     const gaiku = match[1]
     const jyukyo = match[2]
-    const jyukyohyoji = `${gaiku}-${jyukyo}`
-    const residential = residentials.find(
-      (res) => `${res.gaiku}-${res.jyukyo}` === jyukyohyoji,
-    )
+    if (jyukyo) {
+      const jyukyohyoji = `${gaiku}-${jyukyo}`
+      const residential = residentials.find(
+        (res) => `${res.gaiku}-${res.jyukyo}` === jyukyohyoji,
+      )
 
-    if (residential) {
-      const addr2 = addr.replace(jyukyohyoji, '').trim()
-      return {
-        gaiku,
-        jyukyo,
-        addr: addr2,
-        lat: residential.lat,
-        lng: residential.lng,
+      if (residential) {
+        const addr2 = addr.replace(jyukyohyoji, '').trim()
+        return {
+          gaiku,
+          jyukyo,
+          addr: addr2,
+          lat: residential.lat,
+          lng: residential.lng,
+        }
       }
     }
 
     const gaikuItem = gaikuListItem.find((item) => item.gaiku === gaiku)
+
+    const banchi = jyukyo ? `${gaiku}-${jyukyo}` : gaiku
+    const chiban = chibans.find((chib) => chib.banchi === banchi)
+    if (chiban) {
+      const addr2 = addr.replace(banchi, '').trim()
+      return {
+        banchi: chiban.banchi,
+        addr: addr2,
+        lat: chiban.lat || gaikuItem?.lat || '',
+        lng: chiban.lng || gaikuItem?.lng || '',
+      }
+    }
+
     if (gaikuItem) {
       const addr2 = addr.replace(gaikuItem.gaiku, '').trim()
       return { gaiku, addr: addr2, lat: gaikuItem.lat, lng: gaikuItem.lng }
@@ -420,6 +439,11 @@ export const normalize: Normalizer = async (
     level,
   }
 
+  if (normalized && 'banchi' in normalized) {
+    result.addr = normalized.addr
+    result.banchi = normalized.banchi
+    result.level = 8
+  }
   if (normalized && 'gaiku' in normalized) {
     result.addr = normalized.addr
     result.gaiku = normalized.gaiku

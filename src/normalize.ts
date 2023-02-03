@@ -159,6 +159,7 @@ const normalizeResidentialPart = async (
   }
 
   const match = addr.match(/^([1-9][0-9]*)(?:-([1-9][0-9]*))?/)
+  console.log(addr, match)
   if (match) {
     const gaiku = match[1]
     const jyukyo = match[2]
@@ -183,7 +184,12 @@ const normalizeResidentialPart = async (
     const gaikuItem = gaikuListItem.find((item) => item.gaiku === gaiku)
 
     const banchi = jyukyo ? `${gaiku}-${jyukyo}` : gaiku
-    const chiban = chibans.find((chib) => chib.banchi === banchi)
+    let chiban = chibans.find((chib) => chib.banchi === banchi)
+    // TODO: clean this up
+    // 枝筆が無いときに番号を先に使ってみる
+    if (!jyukyo && !chiban) {
+      chiban = chibans.find((chib) => chib.banchi.startsWith(`${gaiku}-`))
+    }
     if (chiban) {
       const addr2 = addr.replace(banchi, '').trim()
       return {

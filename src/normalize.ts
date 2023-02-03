@@ -159,7 +159,6 @@ const normalizeResidentialPart = async (
   }
 
   const match = addr.match(/^([1-9][0-9]*)(?:-([1-9][0-9]*))?/)
-  console.log(addr, match)
   if (match) {
     const gaiku = match[1]
     const jyukyo = match[2]
